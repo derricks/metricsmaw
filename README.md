@@ -13,7 +13,7 @@ Note that metricsmaw isn't itself an analytics tool. It's designed to be a relay
 Using Metricsmaw
 ----------------
 
-Send a binary Erlang term to the server. metricsmaw:socket\_client(Host,Port,Command) provides a simple interface for testing. The term must be one of the following: {add,MetricsName,MetricsType,Data} or {get,MetricsName}. MetricsName can be any valid Erlang atom. MetricsType is one of counter, gauge, or meter_minute. Data is a float or an integer.
+Send a binary Erlang term to the server. <code>metricsmaw:socket\_client(Host,Port,Command)</code> provides a simple interface for testing. <code>Command</code> must be one of the following: <code>{add,MetricsName,MetricsType,Data}</code> or <code>{get,MetricsName}</code>. <code>MetricsName</code> can be any valid Erlang atom. MetricsType is one of <code>counter</code>, <code>gauge</code>, or <code>meter_minute</code>. Data is a float or an integer.
 
 I'm working on client libraries as separate projects. Stay tuned.
 
@@ -26,9 +26,10 @@ Basic Architecture
 ------------------
 
 I had used Coda Hale's library on a project, and its concepts inspired mine. Metrics are items that know how to interpret passed-in data, and Reporters are items that know how to pass that data to other
-systems.
+systems. Or: you push data to Metrics and the server pushes their data to Reporters.
 
 The current set of metrics is:
+
 -   counter
 
     keeps a sum of all the numbers you pass to it. Decrement by passing -1
