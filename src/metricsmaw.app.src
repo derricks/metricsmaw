@@ -1,0 +1,12 @@
+{application, metricsmaw,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { metricsmaw_app, []}},
+  {env, []}
+ ]}.
