@@ -1,7 +1,7 @@
 Metricsmaw
 ==========
 
-Note! Metricsmaw is still extraordinarily early in development! I mostly put it into Github because I wanted to put something into Github.
+_Note! Metricsmaw is still extraordinarily early in development! I mostly put it into Github because I wanted to go through the steps of putting something into Github. There's not a lot of error handling yet._
 
 Metricsmaw came about because I needed a way to aggregate metrics data from disparate languages. While I really like <a href="http://metrics.codahale.com/">Coda Hale's Metrics library</a> for Java applications,
 it's less useful in an environment that might include node.js applications, Erlang servers, C++ code, and more.
