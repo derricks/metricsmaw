@@ -3,12 +3,15 @@
 
 -define (REFRESH, 60000).
 
+-define (REPORTER_LIST, master_list).
+-define (REPORTERS_KEY, reporters).
+
 -define(PURGE_RATE, 300000).
 
 -export([start/0,start/1,add_data/4,add_data/3,get/1,socket_client/3,purge_metrics/0]).
 
 % for timer
--export([run_reporters/1]).
+-export([run_reporters/0]).
 
 % gen_server exports
 -export([init/1,handle_call/3,handle_cast/2,handle_info/2,code_change/3,terminate/2]).
@@ -27,7 +30,6 @@ start_metrics_purge_timer() ->
 start_reporters(List) ->
 	
 	_Dict = ets:new(reporter_processes,[set,protected,named_table,{read_concurrency,true}]),
-	
 	% for each configured reporter, spawn a process for it and register
 	lists:foldl(
 	  fun({ReporterName,ReporterConfig},Acc) -> 
@@ -37,24 +39,45 @@ start_reporters(List) ->
 	  end,
 	  [],
 	  List),
-	  timer:apply_after(?REFRESH,?MODULE,run_reporters,[[Config || {_Name,Config} <- List]]).
+	 set_reporter_timer().
+	
+% set a timer to run the reporters
+set_reporter_timer() ->
+	  Refresh = get_config_key(reporter_refresh,?REFRESH),
+	  timer:apply_after(Refresh,?MODULE,run_reporters,[]).
 		
+% returns the config blob stored in ets
+get_config() ->
+	[H|_] = ets:lookup(config_data,config),
+	H.
+	
+get_config_key(Key,Default) ->
+	{config,Config} = get_config(),
+	proplists:get_value(Key,Config,Default).
+	
 % todo, figure out a better way to do this. foldl seems inefficient (fine for reporters, but maybe not for metrics)
 get_reporters() -> 
     ets:match_object(reporter_processes,{'_','_'}).
 
+get_reporter_config(ReporterName) ->
+	ReporterConfigs = get_config_key(?REPORTERS_KEY,[]),
+	proplists:get_value(ReporterName,ReporterConfigs,[]).
+
 get_metrics() ->
 	ets:match_object(metrics_processes,{'_','_'}).
 
-reporters_foreach(Configs,Fun) ->
+reporters_foreach(Fun) ->
 	Reporters = get_reporters(),
-	ReportersAndConfig = lists:zip(Reporters,Configs),
-	EnabledReporters = lists:filter(fun({_Reporter,PropList}) -> proplists:get_value(enabled,PropList,true) end, ReportersAndConfig),
+	ReportersAndConfigs = lists:map(
+	   fun({ReporterName,_Pid}=Record) -> {Record,get_reporter_config(ReporterName)} end,
+	   Reporters),
+	
+	EnabledReporters = lists:filter(fun({_Reporter,PropList}) -> proplists:get_value(enabled,PropList,true) end, ReportersAndConfigs),
 	lists:foreach(Fun,EnabledReporters).
 	
 	
-begin_gather_run(ReporterConfigs) ->
-	reporters_foreach(ReporterConfigs,
+begin_gather_run() ->
+	reporters_foreach(
 	    fun({{_ReporterName,ReporterPid},Config}) -> 
 		      ReporterPid ! {self(),{gather_start,Config}},
 	
@@ -65,16 +88,16 @@ begin_gather_run(ReporterConfigs) ->
 		   end
 	).
 	
-end_gather_run(Configs) ->
-	reporters_foreach(Configs,
+end_gather_run() ->
+	reporters_foreach(
 	    fun({{_Name,Pid},Config}) -> Pid ! {self(),{gather_end,Config}} end
 	).
 	
 
 % tell the reporters to get ready and then, for each item in metrics, send it to the reporters	
-run_reporters(Configs) ->
+run_reporters() ->
 	
-	begin_gather_run(Configs),
+	begin_gather_run(),
 	
 	% everyone's now started, so for each metric process, give its data to each reporter
 	lists:foreach(
@@ -93,7 +116,7 @@ run_reporters(Configs) ->
 		      
 
 	        % send the appropriate message to each reporter
-	        reporters_foreach(Configs,
+	        reporters_foreach(
 	           fun({{_ReporterName,ReporterPid},Config}) -> ReporterPid ! {self(),{gather,atom_to_list(MetricName),MetricType,MetricData,Config}} end
 	        )
 	
@@ -101,10 +124,10 @@ run_reporters(Configs) ->
 		get_metrics()
 	),
 
-    end_gather_run(Configs),	
+    end_gather_run(),	
 	
 	% and kick off a timer to do it again
-	timer:apply_after(?REFRESH,?MODULE,run_reporters,[Configs]).
+	set_reporter_timer().
 
 %% Socket handling methods
 start_socket(Port) ->
@@ -208,6 +231,10 @@ init(Options) ->
    {ok,Config} = file:consult(ConfigFile),
 
    io:format("Config: ~p~n",[Config]),
+
+   % create an ets table for holding the config object
+   _ConfigDict = ets:new(config_data,[set,protected,named_table,{read_concurrency,true}]),
+   ets:insert(config_data,{config,Config}),
 
    % create an ets that will map metric name to pid. this allows us to send lists of Pids
    % to reporters (without getting _all_ processes, which may include other things)
