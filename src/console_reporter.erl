@@ -9,13 +9,13 @@ init(_Config) -> {ok,ready}.
 gather_start(_Config) -> [].
 
 gather(MetricName,_MetricType,CurrentData,Gatherer,_Config) when is_float(CurrentData) ->
-	[MetricName ++ "	" ++ float_to_list(CurrentData) ++ "\n"| Gatherer];
+	[MetricName ++ "	" ++ float_to_list(CurrentData) ++ utils:newline()| Gatherer];
 gather(MetricName,_MetricType,CurrentData,Gatherer,_Config) when is_integer(CurrentData) ->
-	[MetricName ++ "	" ++ integer_to_list(CurrentData) ++ "\n"| Gatherer];
+	[MetricName ++ "	" ++ integer_to_list(CurrentData) ++ utils:newline() | Gatherer];
 gather(MetricName,_MetricType,CurrentData,Gatherer,_Config) when is_list(CurrentData) ->
-	[MetricName ++ "	" ++ utils:join([Value || {_Key,Value} <- CurrentData],"	") ++ "\n"|Gatherer].
+	[MetricName ++ "	" ++ utils:join([Value || {_Key,Value} <- CurrentData],"	") ++ utils:newline()|Gatherer].
 	
 gather_end([],_Config) -> {ok,[]};
 gather_end(Gatherer,_Config) ->
-	io:format("~s",[list_to_binary(Gatherer)]),
+	io:format("~p~n",[Gatherer]),
 	{ok,[]}.
