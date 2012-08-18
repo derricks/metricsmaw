@@ -64,6 +64,7 @@ The current set of reporters is:
     
     - host: the hostname of the Graphite server (default localhost)
     - port: the port on the Graphite server (default 2003)
+    - timeout: milliseconds to wait before failing (default 6000)
     
 Metrics and reporters are both defined as Erlang behaviours, providing (I hope) a straightforward plugin architecture.
 

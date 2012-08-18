@@ -30,7 +30,8 @@ gather_end(Gatherer,Config) ->
 	% ship it off to the graphite host
 	GraphiteHost = proplists:get_value(host,Config,"localhost"),
 	GraphitePort = proplists:get_value(port,Config,2003),
-	Response = gen_tcp:connect(GraphiteHost,GraphitePort,[list,{packet,0}],6000),
+	Timeout = proplists:get_value(timeout,Config,6000),
+	Response = gen_tcp:connect(GraphiteHost,GraphitePort,[list,{packet,0}],Timeout),
 	case Response of
 		{ok,Socket} ->
 			gen_tcp:send(Socket,list_to_binary(Gatherer)),
