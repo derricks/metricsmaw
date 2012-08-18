@@ -26,7 +26,7 @@ Basic Architecture
 ------------------
 
 I had used Coda Hale's library on a project, and its concepts inspired mine. Metrics are items that know how to interpret passed-in data, and Reporters are items that know how to pass that data to other
-systems. Or: you push data to Metrics and the server pushes their data to Reporters.
+systems. Or: you push data to Metrics and the server pushes metrics data to Reporters. Reporters can be configured in metricsmaw.config with a {reporters,[ProplistPerReporterName]} option. All Reporters support an {enabled,Enabled} tuple, where Enabled defaults to true.
 
 The current set of metrics is:
 
@@ -44,14 +44,27 @@ The current set of metrics is:
     
 The current set of reporters is:
 
--   console
+-   console_reporter
 
     logs information to the console
     
--   csv
+-   csv_reporter
 
     logs information to a csv file
     
-But metrics and reporters are both defined as Erlang behaviours, providing (I hope) a straightforward plugin architecture.
+    Config options:
+    
+    - directory: the directory where the csvs are created (default .)
+
+-   graphite_reporter
+
+    sends information to a Graphite server
+    
+    Config options:
+    
+    - host: the hostname of the Graphite server (default localhost)
+    - port: the port on the Graphite server (default 2003)
+    
+Metrics and reporters are both defined as Erlang behaviours, providing (I hope) a straightforward plugin architecture.
 
 
