@@ -12,7 +12,7 @@ init(_Config) -> {ok,ready}.
 gather_start(_) -> [].
 
 gather(MetricName,_MetricType,Data,Gatherer,_Config) when is_float(Data); is_integer(Data) ->
-	[utils:join(["metricsmaw." ++ MetricName,utils:data_to_string(Data),integer_to_list(utils:unix_time()),"\n"]," ") | Gatherer];
+	[utils:join([MetricName,utils:data_to_string(Data),integer_to_list(utils:unix_time()),"\n"]," ") | Gatherer];
 	
 %% In this case, create a single line for each element in the list, which is assumed to be a list of {Key,Value} tuples
 gather(MetricName,MetricType,Data,Gatherer,Config) when is_list(Data) ->
@@ -28,7 +28,6 @@ gather(MetricName,MetricType,Data,Gatherer,Config) when is_list(Data) ->
 gather_end([],_Config) -> {ok,[]};
 gather_end(Gatherer,Config) ->
 	% ship it off to the graphite host
-	io:format("Sending Msg to Graphite ~p~n",[lists:flatten(Gatherer)]),
 	GraphiteHost = proplists:get_value(host,Config,"localhost"),
 	GraphitePort = proplists:get_value(port,Config,2003),
 	Timeout = proplists:get_value(timeout,Config,6000),
