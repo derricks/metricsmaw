@@ -149,7 +149,8 @@ handle_socket_data(Socket) ->
 		{tcp,Socket,Bin} -> 
 		
 		    % record incoming data volumes
-		    add_data('metricsmaw.system.data_rate',meter_minute,length(Bin)),
+		    add_data('metricsmaw.system.data_rate',meter_minute,byte_size(Bin)),
+		    add_data('metricsmaw.system.requests',meter_minute,1),
 		
 		    Command = socket_message_to_term(Bin),
 		    case Command of
