@@ -15,7 +15,10 @@ Using Metricsmaw
 
 Send a binary Erlang term to the server. <code>metricsmaw:socket\_client(Host,Port,Command)</code> provides a simple interface for testing. <code>Command</code> must be one of the following: <code>{add,MetricsName,MetricsType,Data}</code> or <code>{get,MetricsName}</code>. <code>MetricsName</code> can be any valid Erlang atom. MetricsType is one of <code>counter</code>, <code>gauge</code>, or <code>meter_minute</code>. Data is a float or an integer.
 
-I'm working on client libraries as separate projects. Stay tuned.
+Some client libraries are already in development.
+
+* <a href="https://github.com/derricks/metricsmaw-node">node.js client</a>
+* <a href="https://github.com/derricks/metricsmaw-erl">native Erlang client</a>
 
 Configuring Metricsmaw
 ----------------------
