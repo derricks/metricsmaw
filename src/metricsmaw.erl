@@ -147,6 +147,10 @@ handle_socket_connect(Listen) ->
 handle_socket_data(Socket) ->
 	receive
 		{tcp,Socket,Bin} -> 
+		
+		    % record incoming data volumes
+		    add_data('metricsmaw.system.data_rate',meter_minute,length(Bin)),
+		
 		    Command = socket_message_to_term(Bin),
 		    case Command of
 			   {add,MetricName,MetricType,Data} ->
@@ -270,7 +274,12 @@ handle_cast({add,MetricName,MetricType,Data,Extra},State) ->
 			Pid = spawn(gen_metric,init,[MetricType,State]),
 			register(MetricName,Pid),
 			ets:insert(metrics_processes,{MetricName,Pid}),
-			Pid ! {add,Data,Extra};
+			Pid ! {add,Data,Extra},
+			
+			%% up the number of metrics being monitored
+			add_data('metricsmaw.system.metrics',counter,1)
+			
+			;
 		Pid ->
 			Pid ! {add,Data,Extra}
 	end,
