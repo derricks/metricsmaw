@@ -210,7 +210,7 @@ add_data(MetricName,MetricType,Data) when is_integer(Data);is_float(Data) ->
 	add_data(MetricName,MetricType,Data,null).
 	
 add_data(MetricName,MetricType,Data,Extra) when is_integer(Data); is_float(Data) ->
-	gen_server:call(?MODULE,{add,MetricName,MetricType,Data,Extra}).
+	gen_server:cast(?MODULE,{add,MetricName,MetricType,Data,Extra}).
 	
 
 %% get the current value of the given metric
@@ -249,20 +249,6 @@ init(Options) ->
    start_metrics_purge_timer(),
    
    {ok,Config}.
-
-% todo: what if metric type is invalid
-handle_call(
-    {add,MetricName,MetricType,Data,Extra},_From,State) ->
-		case whereis(MetricName) of
-			undefined -> % metric doesn't exist. create
-				Pid = spawn(gen_metric,init,[MetricType,State]),
-				register(MetricName,Pid),
-				ets:insert(metrics_processes,{MetricName,Pid}),
-				Pid ! {add,Data,Extra};
-			Pid ->
-				Pid ! {add,Data,Extra}
-		end,
-	    {reply,ok,State};	
 	
 % get request
 handle_call(
@@ -277,6 +263,18 @@ handle_call(_Request,_From,State) ->
 	% todo: this should take in a metric and dispatch it to the appropriate process
 	 Reply = ok,	
 	{reply,Reply,State}.
+	
+handle_cast({add,MetricName,MetricType,Data,Extra},State) ->
+	case whereis(MetricName) of
+		undefined -> % metric doesn't exist. create
+			Pid = spawn(gen_metric,init,[MetricType,State]),
+			register(MetricName,Pid),
+			ets:insert(metrics_processes,{MetricName,Pid}),
+			Pid ! {add,Data,Extra};
+		Pid ->
+			Pid ! {add,Data,Extra}
+	end,
+    {noreply,State};	
 	
 handle_cast(_Msg,State) ->
 	{noreply,State}.
