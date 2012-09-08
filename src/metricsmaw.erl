@@ -8,7 +8,7 @@
 
 -define(PURGE_RATE, 300000).
 
--export([start/0,start/1,add_data/4,add_data/3,get/1,socket_client/3,purge_metrics/0]).
+-export([start/0,start/1,add_data/4,add_data/3,get/1,socket_client/3,purge_metrics/0,all_metric_names/0]).
 
 % for timer
 -export([run_reporters/0]).
@@ -222,6 +222,10 @@ add_data(MetricName,MetricType,Data,Extra) when is_integer(Data); is_float(Data)
 get(MetricName) ->
 	gen_server:call(?MODULE,{get,MetricName}).
 	
+% return the names of all the metrics in the system
+all_metric_names() ->
+	gen_server:call(?MODULE,{all_metric_names}).
+	
 	
 
 %% -------------- gen_server -------------------------
@@ -263,6 +267,9 @@ handle_call(
 	    receive
 		    {Pid, ok, Data} -> {reply,Data,State}
 	    end;
+	
+handle_call({all_metric_names},_From,State) ->
+	{reply,[Name || {Name,_Pid} <- get_metrics()],State};
 	
 handle_call(_Request,_From,State) ->
 	% todo: this should take in a metric and dispatch it to the appropriate process
