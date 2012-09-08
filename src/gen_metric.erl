@@ -63,6 +63,10 @@ loop(Module,State) ->
 			
 		{purge} ->
 			NewState = Module:purge(State),
-			loop(Module,NewState)
+			loop(Module,NewState);
+			
+		{From,details} ->
+			From ! {self(),ok,Module:type(),Module:calculate(State)},
+			loop(Module,State)
 			
     end.

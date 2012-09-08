@@ -8,7 +8,7 @@
 
 -define(PURGE_RATE, 300000).
 
--export([start/0,start/1,add_data/4,add_data/3,get/1,socket_client/3,purge_metrics/0,all_metric_names/0]).
+-export([start/0,start/1,add_data/4,add_data/3,get/1,socket_client/3,purge_metrics/0,all_metric_names/0,get_metric_details/1]).
 
 % for timer
 -export([run_reporters/0]).
@@ -225,7 +225,11 @@ get(MetricName) ->
 % return the names of all the metrics in the system
 all_metric_names() ->
 	gen_server:call(?MODULE,{all_metric_names}).
-	
+
+% get full details for a metric: its name, its type, and its current value
+get_metric_details(MetricName) ->
+	gen_server:call(?MODULE,{get_metric_details,MetricName}).
+		
 	
 
 %% -------------- gen_server -------------------------
@@ -258,23 +262,39 @@ init(Options) ->
    start_metrics_purge_timer(),
    
    {ok,Config}.
+
+% find a given metric
+find_metric(MetricName) -> whereis(MetricName).
 	
 % get request
 handle_call(
     {get,MetricName},_From,State) ->
-	    Pid = whereis(MetricName),
-	    Pid ! {self(),get},
-	    receive
-		    {Pid, ok, Data} -> {reply,Data,State}
-	    end;
+	    Pid = find_metric(MetricName),
+	    case Pid of
+		   undefined -> {reply,undefined,State};
+		   _ ->
+			    Pid ! {self(),get},
+			    receive
+				    {Pid, ok, Data} -> {reply,Data,State}
+			    end
+		   end;
 	
 handle_call({all_metric_names},_From,State) ->
 	{reply,[Name || {Name,_Pid} <- get_metrics()],State};
 	
+handle_call({get_metric_details,MetricName},_From,State) ->
+	Pid = find_metric(MetricName),
+	case Pid of
+		undefined -> {reply,undefined,State};
+		_ ->
+			Pid ! {self(),details},
+			receive
+				{Pid,ok,MetricType,MetricValue} -> {reply,{MetricName,MetricType,MetricValue},State}
+			end
+		end;
+	
 handle_call(_Request,_From,State) ->
-	% todo: this should take in a metric and dispatch it to the appropriate process
-	 Reply = ok,	
-	{reply,Reply,State}.
+	{reply,undefined,State}.
 	
 handle_cast({add,MetricName,MetricType,Data,Extra},State) ->
 	case whereis(MetricName) of
