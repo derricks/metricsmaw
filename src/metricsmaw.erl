@@ -159,12 +159,19 @@ handle_socket_data(Socket) ->
 			       handle_socket_data(Socket);
 			   {get,MetricName} ->
 				   Current = ?MODULE:get(MetricName),
-				   if
-					   	 is_float(Current) -> gen_tcp:send(list_to_binary(float_to_list(Current)));
-					     is_integer(Current) -> gen_tcp:send(list_to_binary(integer_to_list(Current)));
-					     true -> gen_tcp:send(term_to_binary(Current))
-				    end,
+				   gen_tcp:send(Socket,
+				      % the result of this gets sent over the socket
+				      if
+					   	 is_float(Current) -> term_to_binary(Current);
+					     is_integer(Current) -> term_to_binary(Current);
+					     true -> term_to_binary(Current)
+				      end),
 				   	handle_socket_data(Socket);
+				
+			  {all_metric_names} ->
+				  gen_tcp:send(Socket,term_to_binary(?MODULE:all_metric_names())),
+				  handle_socket_data(Socket);
+				
 			   _ -> % unknown data
 				  io:format("Invalid message ~p~n",[Command]),
 				  gen_tcp:send(Socket,term_to_binary(Command)),
