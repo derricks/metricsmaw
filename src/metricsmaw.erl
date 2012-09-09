@@ -155,7 +155,7 @@ handle_socket_data(Socket) ->
 		    Command = socket_message_to_term(Bin),
 		    case Command of
 			   {add,MetricName,MetricType,Data} ->
-				   add_data(MetricName,MetricType,Data),
+				   ?MODULE:add_data(MetricName,MetricType,Data),
 			       handle_socket_data(Socket);
 			   {get,MetricName} ->
 				   Current = ?MODULE:get(MetricName),
@@ -167,11 +167,15 @@ handle_socket_data(Socket) ->
 					     true -> term_to_binary(Current)
 				      end),
 				   	handle_socket_data(Socket);
-				
-			  {all_metric_names} ->
-				  gen_tcp:send(Socket,term_to_binary(?MODULE:all_metric_names())),
-				  handle_socket_data(Socket);
-				
+			   % this handles the generic case where a tuple simply represents a method to be run
+			   % specific commands are called out because otherwise you could execute any arbitrary function this way!
+			   % note that guard sequences are separated by semicolons, so you have to reproduce the is_tuple call
+			   Tuple when is_tuple(Tuple), element(1,Tuple) =:= all_metric_names; 
+			              is_tuple(Tuple), element(1,Tuple) =:= get_metric_details ->
+				    [FunName|FunArgs] = tuple_to_list(Tuple),
+				    gen_tcp:send(Socket,term_to_binary(apply(?MODULE,FunName,FunArgs))),
+				    handle_socket_data(Socket);
+				    
 			   _ -> % unknown data
 				  io:format("Invalid message ~p~n",[Command]),
 				  gen_tcp:send(Socket,term_to_binary(Command)),
