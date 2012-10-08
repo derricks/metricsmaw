@@ -19,7 +19,7 @@ gather(MetricName,MetricType,Data,Gatherer,Config) when is_list(Data) ->
 	SplitData = lists:foldl(
 	
 	     % just use the primitive form of this function to construct the string
-	   fun({DataKey,DataValue},Acc) -> Acc ++ gather(MetricName ++ "." ++ atom_to_list(DataKey), MetricType, DataValue, [], Config) end,
+	   fun({DataKey,DataValue},Acc) -> [gather(MetricName ++ "." ++ atom_to_list(DataKey), MetricType, DataValue, [], Config)|Acc] end,
 	   [],
 	   Data),
 	[SplitData|Gatherer].
