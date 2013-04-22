@@ -2,17 +2,18 @@
 
 -behaviour(gen_metric).
 
--export([initial_state/1,measure/3,type/0,reset/0,purge/1,calculate/1]).
+-export([init/0,add_data/2,type/0,reset/0,purge/1,purge/2,calculate/1]).
 
 type() -> gauge.
 
-initial_state(_Config) -> 0.
+init() -> 0.
 
 %% For a gauge, we just care about the value at this time, so just overwrite the state
-measure(Data,_ExtraData,_State) -> Data.
+add_data({Datum,_Timestamp},_State) -> Datum.
 
 reset() -> 0.
 
 purge(State) -> State. % nothing to purge
+purge(State,_ExpireSeconds) -> State.
 
 calculate(State) -> State.

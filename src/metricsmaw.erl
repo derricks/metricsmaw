@@ -6,9 +6,7 @@
 -define (REPORTER_LIST, master_list).
 -define (REPORTERS_KEY, reporters).
 
--define(PURGE_RATE, 300000).
-
--export([start/0,start/1,add_data/4,add_data/3,get/1,socket_client/3,purge_metrics/0,all_metric_names/0,get_metric_details/1]).
+-export([start/0,start/1,get/1,socket_client/3,all_metric_names/0,get_metric_details/1]).
 
 % for timer
 -export([run_reporters/0]).
@@ -18,26 +16,16 @@
 %% Server process that can take in metrics and dispatch them to the individual metrics
 %% processes. This handles socket events and routes based on metric name
 
-% Tell metric objecs to purge older records
-purge_metrics() ->
-	lists:foreach(fun({_MetricName,MetricProcess}) -> MetricProcess ! {purge} end,get_metrics()),
-	start_metrics_purge_timer().
-	
-start_metrics_purge_timer() ->
-	timer:apply_after(?PURGE_RATE,?MODULE,purge_metrics,[]).
-
 %% start the reporters defined in config and return the list of Pid
 start_reporters(List) ->
 	
 	_Dict = ets:new(reporter_processes,[set,protected,named_table,{read_concurrency,true}]),
 	% for each configured reporter, spawn a process for it and register
-	lists:foldl(
-	  fun({ReporterName,ReporterConfig},Acc) -> 
+	lists:foreach(
+	  fun({ReporterName,ReporterConfig}) -> 
 		      Pid = spawn(gen_reporter,process_init,[ReporterName,ReporterConfig]),
-		      ets:insert(reporter_processes,{ReporterName,Pid}),
-		      [Pid|Acc]
+		      ets:insert(reporter_processes,{ReporterName,Pid})
 	  end,
-	  [],
 	  List),
 	 set_reporter_timer().
 	
@@ -62,9 +50,6 @@ get_reporters() ->
 get_reporter_config(ReporterName) ->
 	ReporterConfigs = get_config_key(?REPORTERS_KEY,[]),
 	proplists:get_value(ReporterName,ReporterConfigs,[]).
-
-get_metrics() ->
-	ets:match_object(metrics_processes,{'_','_'}).
 
 reporters_foreach(Fun) ->
 	Reporters = get_reporters(),
@@ -100,30 +85,16 @@ run_reporters() ->
 	begin_gather_run(),
 	
 	% everyone's now started, so for each metric process, give its data to each reporter
-	lists:foreach(
-	    fun({MetricName,MetricPid}) ->
-		   MetricPid ! {self(),get},
-	       MetricData =
-		       receive
-			        {MetricPid,ok,Data} -> Data
-			   end,
-			
-		   MetricPid ! {self(),type},
-		   MetricType =
-		       receive
-			        {MetricPid,ok,Type} -> Type
-			   end,
-		      
-
+	metric_catalog:foreach(
+	    fun({MetricName,MetricType},MetricPid)  ->
 	        % send the appropriate message to each reporter
+	        MetricValue = metric:get_current(MetricPid), % note that here we're in a gen_server call on metric_catalog, so we can't use metric_catalog methods
+	                                                     % todo: spawn this in metric_catalog, since there's no result
 	        reporters_foreach(
-	           fun({{_ReporterName,ReporterPid},Config}) -> ReporterPid ! {self(),{gather,atom_to_list(MetricName),MetricType,MetricData,Config}} end
+	           fun({{_ReporterName,ReporterPid},Config}) -> ReporterPid ! {self(),{gather,atom_to_list(MetricName),MetricType,MetricValue,Config}} end
 	        )
-	
-		end,
-		get_metrics()
-	),
-
+	    end
+    ),
     end_gather_run(),	
 	
 	% and kick off a timer to do it again
@@ -149,13 +120,13 @@ handle_socket_data(Socket) ->
 		{tcp,Socket,Bin} -> 
 		
 		    % record incoming data volumes
-		    add_data('metricsmaw.system.data_rate',meter_minute,byte_size(Bin)),
-		    add_data('metricsmaw.system.socket_requests',meter_minute,1),
+		    metrics:add_data('metricsmaw.system.data_rate',meter_minute,byte_size(Bin)),
+		    metrics:add_data('metricsmaw.system.socket_requests',meter_minute,1),
 		
 		    Command = socket_message_to_term(Bin),
 		    case Command of
 			   {add,MetricName,MetricType,Data} ->
-				   ?MODULE:add_data(MetricName,MetricType,Data),
+				   metrics:add_data(MetricName,MetricType,Data),
 			       handle_socket_data(Socket);
 			   {get,MetricName} ->
 				   Current = ?MODULE:get(MetricName),
@@ -167,6 +138,10 @@ handle_socket_data(Socket) ->
 					     true -> term_to_binary(Current)
 				      end),
 				   	handle_socket_data(Socket);
+			   {subscribe,MetricName} ->
+				   gen_tcp:send(Socket,?MODULE:subscribe(MetricName,Socket)),
+				   handle_socket_data(Socket);
+				
 			   % this handles the generic case where a tuple simply represents a method to be run
 			   % specific commands are called out because otherwise you could execute any arbitrary function this way!
 			   % note that guard sequences are separated by semicolons, so you have to reproduce the is_tuple call
@@ -217,18 +192,6 @@ start() ->
 start(ConfigFile) -> 
 	gen_server:start_link({local,?MODULE},?MODULE,[{config,ConfigFile}],[]).
 
-% the basic call for adding data to the server
-% MetricName is any arbitrary (but unique!) name
-% MetricType is one of the registred metrics types
-% Data is a floating-point number
-% Extra is any Erlang term
-add_data(MetricName,MetricType,Data) when is_integer(Data);is_float(Data) ->
-	add_data(MetricName,MetricType,Data,null).
-	
-add_data(MetricName,MetricType,Data,Extra) when is_integer(Data); is_float(Data) ->
-	gen_server:cast(?MODULE,{add,MetricName,MetricType,Data,Extra}).
-	
-
 %% get the current value of the given metric
 get(MetricName) ->
 	gen_server:call(?MODULE,{get,MetricName}).
@@ -240,6 +203,10 @@ all_metric_names() ->
 % get full details for a metric: its name, its type, and its current value
 get_metric_details(MetricName) ->
 	gen_server:call(?MODULE,{get_metric_details,MetricName}).
+	
+% subscribes the given socket to changes in the given metric
+subscribe(_MetricName,_Socket) -> ok.
+	
 		
 	
 
@@ -260,69 +227,22 @@ init(Options) ->
    _ConfigDict = ets:new(config_data,[set,protected,named_table,{read_concurrency,true}]),
    ets:insert(config_data,{config,Config}),
 
-   % create an ets that will map metric name to pid. this allows us to send lists of Pids
-   % to reporters (without getting _all_ processes, which may include other things)
-   _Dict = ets:new(metrics_processes,[set,protected,named_table,{read_concurrency,true}]),
+   %% todo: move as part of application definition
+   metric_sup:start_link(),
+   metric_catalog:start_link(),
+   metric_custodian:start_link(),
 
    ok = timer:start(),
 
    Reporters = start_reporters(proplists:get_value(reporters,Config,[])),
    io:format("Started reporters ~p~n",[Reporters]),
 
-   start_socket(proplists:get_value(port,Config,18000)),
-   start_metrics_purge_timer(),
+   % start_socket(proplists:get_value(port,Config,18000)),
    
    {ok,Config}.
 
-% find a given metric
-find_metric(MetricName) -> whereis(MetricName).
-	
-% get request
-handle_call(
-    {get,MetricName},_From,State) ->
-	    Pid = find_metric(MetricName),
-	    case Pid of
-		   undefined -> {reply,undefined,State};
-		   _ ->
-			    Pid ! {self(),get},
-			    receive
-				    {Pid, ok, Data} -> {reply,Data,State}
-			    end
-		   end;
-	
-handle_call({all_metric_names},_From,State) ->
-	{reply,[Name || {Name,_Pid} <- get_metrics()],State};
-	
-handle_call({get_metric_details,MetricName},_From,State) ->
-	Pid = find_metric(MetricName),
-	case Pid of
-		undefined -> {reply,undefined,State};
-		_ ->
-			Pid ! {self(),details},
-			receive
-				{Pid,ok,MetricType,MetricValue} -> {reply,{MetricName,MetricType,MetricValue},State}
-			end
-		end;
-	
 handle_call(_Request,_From,State) ->
 	{reply,undefined,State}.
-	
-handle_cast({add,MetricName,MetricType,Data,Extra},State) ->
-	case whereis(MetricName) of
-		undefined -> % metric doesn't exist. create
-			Pid = spawn(gen_metric,init,[MetricType,State]),
-			register(MetricName,Pid),
-			ets:insert(metrics_processes,{MetricName,Pid}),
-			Pid ! {add,Data,Extra},
-			
-			%% up the number of metrics being monitored
-			add_data('metricsmaw.system.metrics',counter,1)
-			
-			;
-		Pid ->
-			Pid ! {add,Data,Extra}
-	end,
-    {noreply,State};	
 	
 handle_cast(_Msg,State) ->
 	{noreply,State}.

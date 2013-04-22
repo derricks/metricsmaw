@@ -15,13 +15,17 @@
 -define (MINUTE_SECONDS, 60).
 -behaviour(gen_metric).
 
--export([initial_state/1,measure/3,type/0,reset/0,purge/1,calculate/1]).
+%% API
+% @todo: Make this debug/test only, since it's only used for testing purposes.
+-export([purge/2]).
+
+-export([init/0,add_data/2,type/0,reset/0,purge/1,calculate/1]).
 
 type() -> meter_minute.
 
-initial_state(_Config) -> [].
+init() -> [].
 
-measure(Data,_Extra,State) -> [{Data,erlang:now()}|State].
+add_data(Datum,State) -> [Datum|State].
 
 reset() -> [].
 
@@ -29,11 +33,15 @@ purge(State) ->
    % remove items older than ITEM_AGE_SECONDS
    data_records_within_timerange(State,0,?ITEM_AGE_SECONDS).
 
+purge(State,ExpireSeconds) ->
+   data_records_within_timerange(State,0,ExpireSeconds).
+
 calculate(State) ->
 	% construct a list of tuples of the following
 	% {last_minute_avg,Data}
 	% {last_five_minutes_avg,Data}
 	% {last_fifteen_minutes_avg,Data}
+	% TODO - probably can construct all three lists with one pass-through of the data, which could be useful if there's a lot of data
     [{last_minute_avg,avg_minute_rate_for_data(State,?MINUTE_SECONDS)},
      {last_five_minutes_avg,avg_minute_rate_for_data(State,5 * ?MINUTE_SECONDS)},
      {last_fifteen_minutes_avg,avg_minute_rate_for_data(State,15 * ?MINUTE_SECONDS)}
@@ -65,10 +73,10 @@ avg_minute_rate_for_data(DataRecords,CurrentSum,CurrentCount,SecondsBack) ->
 			
 % within a set of records of the form {Data,Timestamp}, filter out those between Low and High seconds and keep that
 data_records_within_timerange(DataRecords,LowSeconds,HighSeconds) ->
-	 {_NowMega,NowSec,_NowMicro} = erlang:now(),
+	 CurTime = utils:unix_time(),
 	 lists:filter(
-	    fun({_Data,{_TsMega,TsSec,_TsMicro}}) ->
-		     NowSec - TsSec =< HighSeconds andalso NowSec - TsSec >= LowSeconds
+	    fun({_Data,DataTs}) ->
+		     CurTime - DataTs =< HighSeconds andalso CurTime - DataTs >= LowSeconds
 		end
 	 	,DataRecords   
 	 ).
