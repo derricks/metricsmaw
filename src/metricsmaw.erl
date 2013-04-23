@@ -237,7 +237,7 @@ init(Options) ->
    Reporters = start_reporters(proplists:get_value(reporters,Config,[])),
    io:format("Started reporters ~p~n",[Reporters]),
 
-   % start_socket(proplists:get_value(port,Config,18000)),
+   start_socket(proplists:get_value(port,Config,18000)),
    
    {ok,Config}.
 

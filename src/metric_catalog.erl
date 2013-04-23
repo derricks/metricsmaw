@@ -50,7 +50,8 @@ fetch_value(MetricPid) ->
 %%% @doc Execute Fun for each registered metric
 %%% -----------------------------
 foreach(Fun) ->
-	gen_server:cast(?SERVER,{foreach,Fun}).
+	%done as a call to ensure that any clients wait for the whole thing to finish before doing other steps
+	gen_server:call(?SERVER,{foreach,Fun}).
 
 %%% -----------------------
 %%% gen_server implementations
@@ -72,13 +73,13 @@ handle_call({find,{MetricName,MetricType}},_From,Table) ->
 			end;
 		false -> {reply,{invalid_type,MetricType},Table}
 	end;
+handle_call({foreach,Fun},_From,Table) ->
+	FirstKey = ets:first(Table),
+	process_metric_and_advance(Fun,FirstKey),
+	{reply,ok,Table};
 handle_call(_Request,_From,Table) ->
 	{reply,ok,Table}.
 	
-handle_cast({foreach,Fun},Table) ->
-	FirstKey = ets:first(Table),
-	process_metric_and_advance(Fun,FirstKey),
-	{noreply,Table};
 handle_cast(_Request,Table) ->
 	{noreply,Table}.
 	
