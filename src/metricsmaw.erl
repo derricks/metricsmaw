@@ -231,6 +231,7 @@ init(Options) ->
    metric_sup:start_link(),
    metric_catalog:start_link(),
    metric_custodian:start_link(),
+   hi_sup:start_link(undefined,8000),
 
    ok = timer:start(),
 
